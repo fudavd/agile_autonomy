@@ -1,4 +1,4 @@
-log_dir: '/tmp/train_straight_7ms'
+log_dir: 'ckpt/train_straight_7ms'
 quad_name: 'none'
 odometry_topic: 'ground_truth/odometry'
 rgb_topic: 'agile_autonomy/unity_rgb'
@@ -24,8 +24,8 @@ train:
   top_trajectories: 3
   summary_freq: 400
   data_save_freq: 15
-  train_dir: "data/train"
-  val_dir: "data/val"
+  train_dir: "data/data/train"
+  val_dir: "data/data/test"
   log_images: False
   save_every_n_epochs: 5
   ref_frame: 'bf'
