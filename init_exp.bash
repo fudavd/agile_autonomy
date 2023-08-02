@@ -14,11 +14,6 @@ export LD_LIBRARY_PATH=$LD_PATHS
 
 cd planner_learning
 
-#start_time=$(date +"%H:%M:%S")
-#screen -d -m -S "${start_time}" -L -Logfile "./train_${HOST_NAME}_${start_time}.log" env LD_LIBRARY_PATH=$LD_PATHS nice -n0 python "train.py" --settings_file="config/train_settings_${HOST_NAME}.yaml" & pids+=($!)
-#wait "${pids[@]}"
-#cd ../
-
 start_time=$(date +"%H:%M:%S")
 screen -d -m -S "${start_time}" -L -Logfile "./train_${HOST_NAME}_${start_time}.log" env LD_LIBRARY_PATH=$LD_PATHS nice -n0 python "train.py" --settings_file="config/train_settings_${HOST_NAME}.yaml" & pids+=($!)
 wait "${pids[@]}"
