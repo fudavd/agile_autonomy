@@ -25,8 +25,8 @@ train:
   top_trajectories: 3
   summary_freq: 400
   data_save_freq: 15
-  train_dir: "data/train"
-  val_dir: "data/test"
+  train_dir: "data/data/train"
+  val_dir: "data/data/test"
   log_images: False
   save_every_n_epochs: 5
   ref_frame: 'bf'
