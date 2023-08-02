@@ -36,6 +36,7 @@ class Settings:
             # Input mode
             self.use_rgb = settings['use_rgb']
             self.use_depth = settings['use_depth']
+            self.use_pred = settings['use_pred']
             self.img_width = settings['img_width']
             self.img_height = settings['img_height']
             self.future_time = settings['future_time']

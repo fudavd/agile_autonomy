@@ -5,7 +5,7 @@ rgb_topic: 'agile_autonomy/unity_rgb'
 depth_topic: 'agile_autonomy/sgm_depth'
 use_rgb: False # Use camera images
 use_depth: True # Use depth images
-use_pred: False # Use depth images
+use_pred: True # Use depth images
 state_dim: 3 # x,y,z
 out_seq_len: 10 # Number of steps in the future to predict
 predict_state_number: [] # Empty list means will predict all states in out_seq_len. Otherwise it will train only for the single state. Only supported mode is len(predict_state_number) == 1.

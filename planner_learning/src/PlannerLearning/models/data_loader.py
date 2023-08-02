@@ -4,6 +4,7 @@ import pandas as pd
 import tensorflow as tf
 import fnmatch
 import cv2
+
 try:
     import open3d as o3d
 except:
@@ -34,6 +35,7 @@ class Dataset:
         self.experiments = []
         self.img_filenames = []
         self.depth_filenames = []
+        self.pred_filenames = []
         self.imu_obs = []
         self.traj_fnames = []
         self.traj_idx_num = []
@@ -80,12 +82,13 @@ class PlanDataset(Dataset):
         all_images = [f for f in all_images if ("frame_left" in f)]
         all_traj = os.listdir(os.path.join(dir_subpath, 'trajectories'))
         all_traj = [f for f in all_traj if \
-                        f.startswith('trajectories_{}'.format(self.config.ref_frame)) and f.endswith('.{}'.format(self.data_format))]
+                    f.startswith('trajectories_{}'.format(self.config.ref_frame)) and f.endswith(
+                        '.{}'.format(self.data_format))]
         # Check and convert if needed
         all_traj_np = []
         for filename in all_traj:
             all_traj_np.append(convert_to_npy_traj(os.path.join(dir_subpath, 'trajectories', filename),
-                                                        num_states=self.config.out_seq_len))
+                                                   num_states=self.config.out_seq_len))
         # Get Odometry data
         data_name = os.path.join(dir_subpath, "odometry.csv")
         assert os.path.isfile(data_name), "Not Found data file"
@@ -110,24 +113,23 @@ class PlanDataset(Dataset):
             "vel_y",
             "vel_z"]
 
-
         if self.config.use_bodyrates:
             features_odom.extend([
-                                "omega_x",
-                                "omega_y",
-                                "omega_z"])
+                "omega_x",
+                "omega_y",
+                "omega_z"])
 
         features_odom_v = df[features_odom].values
         if self.config.velocity_frame == 'bf':
-            R_W_C = features_odom_v[:,3:12].reshape((-1,3,3))
+            R_W_C = features_odom_v[:, 3:12].reshape((-1, 3, 3))
             # transform in rotation (for loop first)
             for k in range(R_W_C.shape[0]):
                 R_W_C_k = R_W_C[k]
                 R_C_W_k = R_W_C_k.T
-                v_k_w = features_odom_v[k,12:15].reshape((3,1))
+                v_k_w = features_odom_v[k, 12:15].reshape((3, 1))
                 v_k_c = R_C_W_k @ v_k_w
                 # apply transform in place
-                features_odom_v[k,12:15] = v_k_c.T
+                features_odom_v[k, 12:15] = v_k_c.T
         elif self.config.velocity_frame != 'wf':
             raise IOError("Velocity Frame is unclear")
         num_images = len(all_images)
@@ -158,10 +160,13 @@ class PlanDataset(Dataset):
 
         for k in range(num_files):
             is_valid = False
-            img_fname = os.path.join(dir_subpath, "img", "frame_left_{:08d}.{}".format(k+1, self.img_format))
+            img_fname = os.path.join(dir_subpath, "img", "frame_left_{:08d}.{}".format(k + 1, self.img_format))
             traj_fname = os.path.join(dir_subpath, "trajectories",
-                                          "trajectories_{}_{:08d}.{}".format(self.config.ref_frame, k, "npy"))
-            depth_fname = os.path.join(dir_subpath, "img", "depth_{:08d}.{}".format(k+1, "tif"))
+                                      "trajectories_{}_{:08d}.{}".format(self.config.ref_frame, k, "npy"))
+            depth_fname = os.path.join(dir_subpath, "img", "depth_{:08d}.{}".format(k + 1, "tif"))
+
+            pred_fname = os.path.join(dir_subpath, "img", "pred_{:08d}.{}".format(k + 1, "png"))
+
             if os.path.isfile(img_fname) and \
                     os.path.isfile(traj_fname) and \
                     os.path.isfile(depth_fname) and \
@@ -174,6 +179,8 @@ class PlanDataset(Dataset):
                     self.img_filenames.append(img_fname)
                 if self.config.use_depth:
                     self.depth_filenames.append(depth_fname)
+                if self.config.use_pred:
+                    self.pred_filenames.append(pred_fname)
                 goal_dir = self.adapt_reference_frame(features_odom_v[k][3:12],
                                                       reference_direction[k])
 
@@ -188,17 +195,17 @@ class PlanDataset(Dataset):
             return reference_velocity
         elif self.config.velocity_frame == 'bf':
             R_W_C = rotation_matrix.reshape((3, 3))
-            v_C = R_W_C.T @ reference_velocity.reshape([3,1])
+            v_C = R_W_C.T @ reference_velocity.reshape([3, 1])
             return np.squeeze(v_C)
         else:
             raise IOError("Reference frame not recognized")
 
     def calculate_ref_dir(self, drone_pos, ref_pos):
         reference_progress = [1]
-        goal_dir = ref_pos[np.minimum(int(50*self.config.future_time),ref_pos.shape[0]-1)] - drone_pos[0]
+        goal_dir = ref_pos[np.minimum(int(50 * self.config.future_time), ref_pos.shape[0] - 1)] - drone_pos[0]
         goal_dir = goal_dir / np.linalg.norm(goal_dir)
         reference_direction = [goal_dir]
-        for j in range(1,drone_pos.shape[0]):
+        for j in range(1, drone_pos.shape[0]):
             quad_position = drone_pos[j]
             current_idx = reference_progress[-1]
             reference_position = ref_pos[current_idx]
@@ -213,15 +220,15 @@ class PlanDataset(Dataset):
                     reference_position = ref_pos[k]
                     next_point_distance = np.linalg.norm(reference_position - quad_position)
                     if next_point_distance > distance:
-                        reference_progress.append(k-1)
-                        future_idx = np.minimum(k-1 + int(50*self.config.future_time), ref_pos.shape[0] -1)
+                        reference_progress.append(k - 1)
+                        future_idx = np.minimum(k - 1 + int(50 * self.config.future_time), ref_pos.shape[0] - 1)
                         goal_dir = ref_pos[future_idx] - quad_position
                         goal_dir = goal_dir / np.linalg.norm(goal_dir)
                         reference_direction.append(goal_dir)
                         break
                     else:
                         distance = next_point_distance
-                        if k == ref_pos.shape[0] -1:
+                        if k == ref_pos.shape[0] - 1:
                             # distance of all next points is larger than current_Idx
                             reference_progress.append(current_idx)
                             goal_dir = ref_pos[current_idx] - quad_position
@@ -258,22 +265,22 @@ class PlanDataset(Dataset):
         k = np.minimum(self.config.top_trajectories,
                        all_traj.shape[0])
         if len(self.config.predict_state_number) == 0:
-            label_length = 3*self.config.out_seq_len
+            label_length = 3 * self.config.out_seq_len
         else:
             label_length = 3
         traj_set = np.zeros((self.config.top_trajectories,
                              label_length))
         if len(self.config.predict_state_number) == 0:
-            traj_set[:k] = all_traj[:k,:-1]
+            traj_set[:k] = all_traj[:k, :-1]
         elif self.config.predict_state_number[0] <= self.config.out_seq_len:
             state_to_predict = self.config.predict_state_number[0]
-            reshaped_traj = all_traj[:k,:-1].reshape((k, self.config.out_seq_len, self.config.state_dim), order='F')
-            traj_set[:k] = np.squeeze(reshaped_traj[:,(state_to_predict-1):state_to_predict])
+            reshaped_traj = all_traj[:k, :-1].reshape((k, self.config.out_seq_len, self.config.state_dim), order='F')
+            traj_set[:k] = np.squeeze(reshaped_traj[:, (state_to_predict - 1):state_to_predict])
 
         if k < self.config.top_trajectories:
             # copy some
             traj_set[k:] = np.repeat(np.expand_dims(traj_set[0], 0),
-                                    [self.config.top_trajectories - k], axis=0)
+                                     [self.config.top_trajectories - k], axis=0)
         return np.array(traj_set, dtype=np.float32)
 
     def decode_img_cv2(self, sample_num):
@@ -299,6 +306,26 @@ class PlanDataset(Dataset):
         depth = np.tile(depth, (1, 1, 3))
         return depth
 
+    def decode_pred_cv2(self, sample_num):
+        sample_num_np = sample_num.numpy()
+        fname_depth = self.depth_filenames[sample_num_np]
+        depth = cv2.imread(fname_depth, cv2.IMREAD_ANYDEPTH)
+        depth = np.minimum(depth, 20000)
+        dim = (self.config.img_width, self.config.img_height)
+        depth = cv2.resize(depth, dim)
+        depth = np.array(depth, dtype=np.float32)
+        depth = depth / (80)  # depth in (0.255)
+
+        fname_pred = self.pred_filenames[sample_num_np]
+        pred = cv2.imread(fname_pred, cv2.IMREAD_ANYDEPTH)
+
+        depth_pred = np.expand_dims(depth, axis=-1)
+        depth_pred = np.tile(depth_pred, (1, 1, 3))
+
+        depth_pred[:, :, 1] = np.abs(depth - pred)
+        depth_pred[:, :, 2] = np.multiply(depth_pred[:, :, 0], (depth_pred[:, :, 1] > 5))
+        return depth_pred
+
     def _dataset_map(self, sample_num):
         gt_traj = tf.py_function(func=self.load_trajectory,
                                  inp=[sample_num],
@@ -323,7 +350,13 @@ class PlanDataset(Dataset):
                 depth = tf.py_function(func=self.decode_depth_cv2,
                                        inp=[idx_seq[i]],
                                        Tout=tf.float32)
+                if self.config.use_pred:
+                    pred = tf.py_function(func=self.decode_pred_cv2,
+                                          inp=[idx_seq[i]],
+                                          Tout=tf.float32)
+                    depth = pred
                 depth_seq.append(depth)
+
         # concat and play
         imu_seq = tf.stack(imu_seq)  # [seq_len, N]
         if self.config.use_rgb and self.config.use_depth:
@@ -364,7 +397,7 @@ class PlanDataset(Dataset):
                 else:
                     # we are in a transient, duplicate last element
                     idx_seq.append(idx_seq[-1])
-                idx += int(input_frequency/self.config.seq_len) # sampling at self.config.seq_len Hz
+                idx += int(input_frequency / self.config.seq_len)  # sampling at self.config.seq_len Hz
             assert len(idx_seq) == self.config.seq_len, "Something went wrong in frame processing"
             self.processed_idxs.append(idx_seq)
         # EndFor
