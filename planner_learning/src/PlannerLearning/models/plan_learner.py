@@ -37,9 +37,10 @@ class PlanLearner(object):
         self.cost_loss = TrajectoryCostLoss(ref_frame=self.config.ref_frame, state_dim=self.config.state_dim)
         self.cost_loss_v = TrajectoryCostLoss(ref_frame=self.config.ref_frame, state_dim=self.config.state_dim)
 
+        learning_rate = self.config.learning_rate
         # rate scheduler
         self.learning_rate_fn = tf.keras.experimental.CosineDecayRestarts(
-            			1e-3,
+            			learning_rate,
             			50000,
             			1.5,
             			0.75,
@@ -76,6 +77,11 @@ class PlanLearner(object):
             space_loss = self.space_loss(labels, predictions)
             cost_loss = self.cost_loss((inputs['roll_id'], inputs['imu'][:, -1, :12]), predictions)
             loss = space_loss + cost_loss
+        self.config.wandb.log({
+            "loss_traj": space_loss,
+            "loss_cost": cost_loss,
+            "loss": loss,
+        })
         gradients = tape.gradient(loss, self.network.trainable_variables)
         gradients = [tf.clip_by_norm(g, 1) for g in gradients]
         self.optimizer.apply_gradients(zip(gradients, self.network.trainable_variables))

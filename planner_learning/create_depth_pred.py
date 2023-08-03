@@ -38,7 +38,7 @@ def main():
                                    [ 0,  0, -1],
                                    [ 0, -1,  0]])
 
-    predictor = PredictDepth((ny,nx), fov_x, fov_y, 10, 2, cam_rot)
+    predictor = PredictDepth((ny,nx), fov_x, fov_y, 1, 2, cam_rot)
 
     dataset_val = create_dataset(settings.val_dir,
                                  settings, training=False)

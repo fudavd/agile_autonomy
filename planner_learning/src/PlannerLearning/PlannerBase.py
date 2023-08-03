@@ -17,7 +17,7 @@ from std_msgs.msg import Empty
 from scipy.spatial.transform import Rotation as R
 from agile_autonomy_msgs.msg import MultiTrajectory
 import tensorflow as tf
-
+from src.MPDC.PredictorLean import PredictDepth_cp as PredictDepth
 from .models.plan_learner import PlanLearner
 
 
@@ -42,6 +42,11 @@ class PlanBase(object):
             (self.config.img_height, self.config.img_width, 3))
         self.depth = np.zeros(
             (self.config.img_height, self.config.img_width, 3))
+        #TODO CREATE RIGHT LINK
+        self.predict_depth = PredictDepth()
+        self.depth_pred = np.zeros(
+            (self.config.img_height, self.config.img_width), np.float32)
+
         self.n_times_expert = 0
         self.n_times_net = 0.00001
         self.start_time = None
@@ -195,7 +200,24 @@ class PlanBase(object):
         depth = depth / (80) # normalization factor to put depth in (0,255)
         depth = np.expand_dims(depth, axis=-1)
         depth = np.tile(depth, (1, 1, 3))
+
+        if self.config.use_pred:
+            depth[:, :, 1] = np.abs(depth[:, :, 0] - self.depth_pred)
+            depth[:, :, 2] = np.multiply(depth[:, :, 0], (depth[:, :, 1] > 5))
         return depth
+
+    def predict_next_frame(self, input: MultiTrajectory):
+        #TODO MPDC function
+        best_traj = input.trajectories[0]
+        disered_pos = best_traj.points[0]
+        x_des = disered_pos.pose.position.x
+        y_des = disered_pos.pose.position.y
+        z_des = disered_pos.pose.position.z
+        pos_delta = np.array([[x_des], [y_des], [z_des]])/1.5
+        img = self.depth[:,:,0]
+        # print(img.shape)
+        self.depth_pred = self.predict_depth.pred_depth(img, pos_delta)
+        return
 
     def callback_depth(self, data):
         '''
@@ -438,6 +460,8 @@ class PlanBase(object):
                 traj_pred = self._convert_to_traj(traj_pred)
                 multi_traj.trajectories.append(traj_pred)
         self.traj_pub.publish(multi_traj)
+        if self.config.use_pred:
+            self.predict_next_frame(multi_traj)
         if net_in_control:
             self.n_times_net += 1
         else:
@@ -457,4 +481,5 @@ class PlanBase(object):
 
         self._prepare_net_inputs()
         results = self.learner.inference(self.net_inputs)
+        #TODO set MPDC
         self.trajectory_decision(results)
