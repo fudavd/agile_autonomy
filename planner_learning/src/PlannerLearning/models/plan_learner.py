@@ -77,11 +77,6 @@ class PlanLearner(object):
             space_loss = self.space_loss(labels, predictions)
             cost_loss = self.cost_loss((inputs['roll_id'], inputs['imu'][:, -1, :12]), predictions)
             loss = space_loss + cost_loss
-        self.config.wandb.log({
-            "loss_traj": space_loss,
-            "loss_cost": cost_loss,
-            "loss": loss,
-        })
         gradients = tape.gradient(loss, self.network.trainable_variables)
         gradients = [tf.clip_by_norm(g, 1) for g in gradients]
         self.optimizer.apply_gradients(zip(gradients, self.network.trainable_variables))
