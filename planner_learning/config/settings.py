@@ -90,7 +90,7 @@ class TrainSetting(Settings):
             train_conf = settings['train']
             self.max_training_epochs = train_conf['max_training_epochs']
             self.batch_size = train_conf['batch_size']
-            self.learning_rate = train_conf['lr']
+            self.learning_rate = train_conf['learning_rate']
             self.data_save_freq = train_conf['data_save_freq']
             self.summary_freq = train_conf['summary_freq']
             self.train_dir = train_conf['train_dir']
